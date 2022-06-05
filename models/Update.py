@@ -41,10 +41,12 @@ class LocalUpdate(object):
             print("Invalid optimizer")
 
         epoch_loss = []
+        trained_data_size = 0
         for iter in range(self.args.local_ep):
             batch_loss = []
             for batch_idx, (images, labels) in enumerate(self.ldr_train):
                 images, labels = images.to(self.args.device), labels.to(self.args.device)
+                trained_data_size += len(images)
                 net.zero_grad()
                 log_probs = net(images)
                 loss = self.loss_func(log_probs, labels)
@@ -61,4 +63,4 @@ class LocalUpdate(object):
                         thresholds = thresholds + [round(value.item(), 2)]
                     print('Epoch: {}, batch {}, threshold {}, leak {}, timesteps {}'.format(iter, batch_idx + 1, thresholds, net.module.leak.item(), net.module.timesteps))
             epoch_loss.append(sum(batch_loss)/len(batch_loss))
-        return net.state_dict(), sum(epoch_loss) / len(epoch_loss)
+        return net.state_dict(), sum(epoch_loss) / len(epoch_loss), trained_data_size

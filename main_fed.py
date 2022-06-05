@@ -149,10 +149,13 @@ if __name__ == '__main__':
     # Define Fed Learn object
     fl = FedLearn(args)
 
+    client_selection_history = []
+
     for iter in range(args.epochs):
         net_glob.train()
         w_locals_selected, loss_locals_selected = [], []
         w_locals_all, loss_locals_all = [], []
+        trained_data_size_all = []
         
         # for idx in idxs_users:
         # Do local update in all the clients # Not required (local updates in only the selected clients is enough) for normal experiments but neeeded for model deviation analysis
@@ -161,9 +164,12 @@ if __name__ == '__main__':
             model_copy = type(net_glob.module)(**model_args) # get a new instance
             model_copy = nn.DataParallel(model_copy)
             model_copy.load_state_dict(net_glob.state_dict()) # copy weights and stuff
-            w, loss = local.train(net=model_copy.to(args.device))
+            w, loss, trained_data_size = local.train(net=model_copy.to(args.device))
             w_locals_all.append(copy.deepcopy(w))
             loss_locals_all.append(copy.deepcopy(loss))
+            trained_data_size_all.append(trained_data_size)
+        
+        # print("training data distribution: ", trained_data_size_all)
         
         m = max(int(args.frac * args.num_users), 1)
         if not args.client_selection:
@@ -175,13 +181,34 @@ if __name__ == '__main__':
         elif args.client_selection == "grad_diversity":
             delta_w_locals_all = []
             w_init = net_glob.state_dict()
-            for i in range(0, len(w_locals_all)):
+            for i in range(len(w_locals_all)):
                 delta_w = {}
                 for k in w_init.keys():
                     delta_w[k] = w_locals_all[i][k] - w_init[k]
                 delta_w_locals_all.append(delta_w)
-            idxs_users = client_selection.grad_diversity(delta_w_locals_all, args.num_users, m)
+            available_users = [i for i in range(args.num_users)]
+            # if len(client_selection_history) > 0:
+            #     available_users.remove(client_selection_history[-1][0]) # force choose different first client
+            #     available_users.remove(client_selection_history[-1][1])
+            idxs_users = client_selection.grad_diversity(delta_w_locals_all, args.num_users, m, available_users)
+        elif args.client_selection == "update_norm":
+            delta_w_locals_all = []
+            w_init = net_glob.state_dict()
+            for i in range(len(w_locals_all)):
+                delta_w = {}
+                for k in w_init.keys():
+                    delta_w[k] = w_locals_all[i][k] - w_init[k]
+                delta_w_locals_all.append(delta_w)
+            # Need to find number of training examples of each data size
+            idxs_users, delta_w_locals_all_rescaled = client_selection.update_norm(delta_w_locals_all, trained_data_size_all, args.num_users, m)
+            
+            # update new weights:
+            for i in range(len(w_locals_all)):
+                for k in w_init.keys():
+                    w_locals_all[i][k] = w_init[k] + delta_w_locals_all_rescaled[i][k]
+
         print("Selected clients:", idxs_users)
+        client_selection_history.append(idxs_users)
 
         for idx in idxs_users:
             w_locals_selected.append(copy.deepcopy(w_locals_all[idx]))
@@ -192,20 +219,9 @@ if __name__ == '__main__':
         # update global weights
         w_glob = fl.FedAvg(w_locals_selected, w_init = net_glob.state_dict())
         
-        w_init = net_glob.state_dict()
-        delta_w_locals_selected = []
-        for i in range(0, len(w_locals_selected)):
-            delta_w = {}
-            for k in w_init.keys():
-                delta_w[k] = w_locals_selected[i][k] - w_init[k]
-            delta_w_locals_selected.append(delta_w)
-
         # copy weight to net_glob
         net_glob.load_state_dict(w_glob)
  
-        # print loss
-        print("Local loss all:", loss_locals_all)
-        print("Local loss selected:", loss_locals_selected)
         loss_avg = sum(loss_locals_selected) / len(loss_locals_selected)
         print('Round {:3d}, Average loss {:.3f}'.format(iter, loss_avg))
         loss_train_list.append(loss_avg)
@@ -272,3 +288,10 @@ if __name__ == '__main__':
     fn = './{}/model_deviation_{}_{}_{}_C{}_iid{}.json'.format(args.result_dir, args.dataset, args.model, args.epochs, args.frac, args.iid)
     with open(fn, 'w') as f:
         json.dump(ms_model_deviation, f)
+
+    # Save client selection history
+    f = open("./{}/client_selection_history.txt".format(args.result_dir), "w")
+    f.write("Client selection history\n")
+    for i in range(len(client_selection_history)):
+        f.write("Round {}, selected: {} \n".format(i, client_selection_history[i]))
+    f.close()

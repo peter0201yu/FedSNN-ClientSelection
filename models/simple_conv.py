@@ -37,7 +37,7 @@ class Simple_Net(nn.Module):
         self.leak_mem = leak_mem
         self.batch_num = self.timesteps
 
-        print (">>>>>>>>>>>>>>>>>>> VGG 9 >>>>>>>>>>>>>>>>>>>>>>")
+        print (">>>>>>>>>>>>>>>>>>> Simple Model >>>>>>>>>>>>>>>>>>>>>>")
         print ("{} time step per batchnorm for a client".format(self.batch_num))
         print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 

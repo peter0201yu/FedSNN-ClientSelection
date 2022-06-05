@@ -1,0 +1,61 @@
+Files already downloaded and verified
+Files already downloaded and verified
+Dataset size: 50000
+>>>>>>>>>>>>>>>>>>> Simple Model >>>>>>>>>>>>>>>>>>>>>>
+10 time step per batchnorm for a client
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+Simple_Net(
+  (conv1): Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+  (bntt1): ModuleList(
+    (0): BatchNorm2d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (1): BatchNorm2d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (2): BatchNorm2d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (3): BatchNorm2d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (4): BatchNorm2d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (5): BatchNorm2d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (6): BatchNorm2d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (7): BatchNorm2d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (8): BatchNorm2d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (9): BatchNorm2d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+  )
+  (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+  (bntt2): ModuleList(
+    (0): BatchNorm2d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (1): BatchNorm2d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (2): BatchNorm2d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (3): BatchNorm2d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (4): BatchNorm2d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (5): BatchNorm2d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (6): BatchNorm2d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (7): BatchNorm2d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (8): BatchNorm2d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (9): BatchNorm2d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+  )
+  (pool1): AvgPool2d(kernel_size=8, stride=8, padding=0)
+  (fc1): Linear(in_features=1024, out_features=64, bias=False)
+  (bntt_fc): ModuleList(
+    (0): BatchNorm1d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (1): BatchNorm1d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (2): BatchNorm1d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (3): BatchNorm1d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (4): BatchNorm1d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (5): BatchNorm1d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (6): BatchNorm1d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (7): BatchNorm1d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (8): BatchNorm1d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+    (9): BatchNorm1d(64, eps=0.0001, momentum=0.1, affine=True, track_running_stats=True)
+  )
+  (fc2): Linear(in_features=64, out_features=10, bias=False)
+)
+>>>>>>>>>>>>>>>>>>> Simple Model >>>>>>>>>>>>>>>>>>>>>>
+10 time step per batchnorm for a client
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+>>>>>>>>>>>>>>>>>>> Simple Model >>>>>>>>>>>>>>>>>>>>>>
+10 time step per batchnorm for a client
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+>>>>>>>>>>>>>>>>>>> Simple Model >>>>>>>>>>>>>>>>>>>>>>
+10 time step per batchnorm for a client
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+>>>>>>>>>>>>>>>>>>> Simple Model >>>>>>>>>>>>>>>>>>>>>>
+10 time step per batchnorm for a client
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
