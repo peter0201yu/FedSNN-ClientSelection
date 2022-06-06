@@ -12,7 +12,7 @@ def biggest_loss(local_losses, num_users, num_selected):
     if local_losses == []:
         return random(num_users, num_selected)
     ret = sorted(range(len(local_losses)), key=lambda x: local_losses[x])
-    print("Local loss all:", loss_locals_all)
+    print("Local loss all:", local_losses)
     loss_locals_selected = [local_losses[i] for i in ret[(-1)*num_selected:]]
     print("Local loss selected:", loss_locals_selected)
     return ret[(-1)*num_selected:]

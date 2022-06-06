@@ -160,6 +160,7 @@ if __name__ == '__main__':
         # for idx in idxs_users:
         # Do local update in all the clients # Not required (local updates in only the selected clients is enough) for normal experiments but neeeded for model deviation analysis
         for idx in range(args.num_users):
+            print("len(dict_users[idx]): ", len(dict_users[idx]))
             local = LocalUpdate(args=args, dataset=dataset_train, idxs=dict_users[idx]) # idxs needs the list of indices assigned to this particular client
             model_copy = type(net_glob.module)(**model_args) # get a new instance
             model_copy = nn.DataParallel(model_copy)
@@ -216,6 +217,7 @@ if __name__ == '__main__':
         
         model_dev_list = model_deviation(w_locals_all, net_glob.state_dict())
         ms_model_deviation.append(model_dev_list)
+
         # update global weights
         w_glob = fl.FedAvg(w_locals_selected, w_init = net_glob.state_dict())
         
