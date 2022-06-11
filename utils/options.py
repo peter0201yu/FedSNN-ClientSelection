@@ -33,6 +33,7 @@ def args_parser():
     parser.add_argument('--split', type=str, default='user', help="train-test split type, user or sample")
 
     parser.add_argument('--client_selection', type=str, default=None, help='client selection strategy')
+    parser.add_argument('--candidate_frac', type=float, default=None, help='the fraction of candidates in training: d')
 
     # model arguments
     parser.add_argument('--model', type=str, default='mlp', help='model name')

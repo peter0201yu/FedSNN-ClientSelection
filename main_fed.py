@@ -13,7 +13,7 @@ from torchvision import datasets, transforms
 import torch
 import torch.nn as nn
 
-from utils.sampling import mnist_iid, mnist_noniid, cifar_iid, cifar_non_iid, mnist_dvs_iid, mnist_dvs_non_iid, nmnist_iid, nmnist_non_iid
+from utils.sampling import mnist_iid, mnist_non_iid, cifar_iid, cifar_non_iid, mnist_dvs_iid, mnist_dvs_non_iid, nmnist_iid, nmnist_non_iid
 from utils.options import args_parser
 from models.Update import LocalUpdate
 from models.Fed import FedLearn
@@ -23,6 +23,7 @@ import models.vgg as ann_models
 import models.resnet as resnet_models
 import models.vgg_spiking_bntt as snn_models_bntt
 import models.simple_conv as simple_model
+import models.simple_conv_mnist as simple_model_mnist
 import models.client_selection as client_selection
 
 import tables
@@ -101,7 +102,9 @@ if __name__ == '__main__':
         model_args = {'num_cls': args.num_classes, 'timesteps': args.timesteps}
         if args.dataset == 'MNIST':
             model_args['img_size'] = 28
-        net_glob = simple_model.Simple_Net(**model_args).cuda()
+            net_glob = simple_model_mnist.Simple_Net_Mnist(**model_args).cuda()
+        else:
+            net_glob = simple_model.Simple_Net(**model_args).cuda()
     else:
         exit('Error: unrecognized model')
     print(net_glob)
@@ -124,7 +127,7 @@ if __name__ == '__main__':
     ms_acc_test_list, ms_loss_test_list = [], []
     ms_num_client_list, ms_tot_comm_cost_list, ms_avg_comm_cost_list, ms_max_comm_cost_list = [], [], [], []
     ms_tot_nz_grad_list, ms_avg_nz_grad_list, ms_max_nz_grad_list = [], [], []
-    ms_model_deviation = []
+    # ms_model_deviation = []
 
     # testing
     net_glob.eval()
@@ -157,9 +160,22 @@ if __name__ == '__main__':
         w_locals_all, loss_locals_all = [], []
         trained_data_size_all = []
         
+        candidates = [idx for idx in range(args.num_users) if len(dict_users[idx]) > args.bs]
+        if args.client_selection == "random" and args.candidate_frac:
+            candidate_num = max(int(args.candidate_frac * args.num_users),1)
+            candidates = np.random.choice(range(args.num_users), size=candidate_num, replace=False)
+        elif args.candidate_frac:
+            # Choose preliminary candidate client set: improve speed for client selection algorithm
+            dataset_size = sum([len(dict_users[i]) for i in range(args.num_users)])
+            probs = [float(len(dict_users[i]))/dataset_size for i in range(args.num_users)]
+            candidate_num = max(int(args.candidate_frac * args.num_users),1)
+            candidates = np.random.choice(range(args.num_users), size=candidate_num, replace=False, p=probs)
+
+        print("candidate clients: ", candidates)
+
         # for idx in idxs_users:
         # Do local update in all the clients # Not required (local updates in only the selected clients is enough) for normal experiments but neeeded for model deviation analysis
-        for idx in range(args.num_users):
+        for idx in candidates:
             print("len(dict_users[idx]): ", len(dict_users[idx]))
             local = LocalUpdate(args=args, dataset=dataset_train, idxs=dict_users[idx]) # idxs needs the list of indices assigned to this particular client
             model_copy = type(net_glob.module)(**model_args) # get a new instance
@@ -173,12 +189,10 @@ if __name__ == '__main__':
         # print("training data distribution: ", trained_data_size_all)
         
         m = max(int(args.frac * args.num_users), 1)
-        if not args.client_selection:
-            idxs_users = np.random.choice(range(args.num_users), m, replace=False)
-        elif args.client_selection == "random":
-            idxs_users = client_selection.random(args.num_users, m)
+        if not args.client_selection or args.client_selection == "random":
+            idxs_users = client_selection.random(len(candidates), m)
         elif args.client_selection == "biggest_loss":
-            idxs_users = client_selection.biggest_loss(loss_locals_all, args.num_users, m)
+            idxs_users = client_selection.biggest_loss(loss_locals_all, len(candidates), m)
         elif args.client_selection == "grad_diversity":
             delta_w_locals_all = []
             w_init = net_glob.state_dict()
@@ -187,11 +201,7 @@ if __name__ == '__main__':
                 for k in w_init.keys():
                     delta_w[k] = w_locals_all[i][k] - w_init[k]
                 delta_w_locals_all.append(delta_w)
-            available_users = [i for i in range(args.num_users)]
-            # if len(client_selection_history) > 0:
-            #     available_users.remove(client_selection_history[-1][0]) # force choose different first client
-            #     available_users.remove(client_selection_history[-1][1])
-            idxs_users = client_selection.grad_diversity(delta_w_locals_all, args.num_users, m, available_users)
+            idxs_users = client_selection.grad_diversity(delta_w_locals_all, len(candidates), m)
         elif args.client_selection == "update_norm":
             delta_w_locals_all = []
             w_init = net_glob.state_dict()
@@ -201,22 +211,23 @@ if __name__ == '__main__':
                     delta_w[k] = w_locals_all[i][k] - w_init[k]
                 delta_w_locals_all.append(delta_w)
             # Need to find number of training examples of each data size
-            idxs_users, delta_w_locals_all_rescaled = client_selection.update_norm(delta_w_locals_all, trained_data_size_all, args.num_users, m)
+            idxs_users, delta_w_locals_all_rescaled = client_selection.update_norm(delta_w_locals_all, trained_data_size_all, len(candidates), m)
             
             # update new weights:
             for i in range(len(w_locals_all)):
                 for k in w_init.keys():
                     w_locals_all[i][k] = w_init[k] + delta_w_locals_all_rescaled[i][k]
 
-        print("Selected clients:", idxs_users)
-        client_selection_history.append(idxs_users)
+        # idxs_users gives the client's index in the candidates list, need to convert
+        print("Selected clients:", [candidates[idx] for idx in idxs_users])
+        client_selection_history.append([candidates[idx] for idx in idxs_users])
 
         for idx in idxs_users:
             w_locals_selected.append(copy.deepcopy(w_locals_all[idx]))
             loss_locals_selected.append(copy.deepcopy(loss_locals_all[idx]))
         
-        model_dev_list = model_deviation(w_locals_all, net_glob.state_dict())
-        ms_model_deviation.append(model_dev_list)
+        # model_dev_list = model_deviation(w_locals_all, net_glob.state_dict())
+        # ms_model_deviation.append(model_dev_list)
 
         # update global weights
         w_glob = fl.FedAvg(w_locals_selected, w_init = net_glob.state_dict())
@@ -287,9 +298,9 @@ if __name__ == '__main__':
 
     torch.save(net_glob.module.state_dict(), './{}/saved_model'.format(args.result_dir))
 
-    fn = './{}/model_deviation_{}_{}_{}_C{}_iid{}.json'.format(args.result_dir, args.dataset, args.model, args.epochs, args.frac, args.iid)
-    with open(fn, 'w') as f:
-        json.dump(ms_model_deviation, f)
+    # fn = './{}/model_deviation_{}_{}_{}_C{}_iid{}.json'.format(args.result_dir, args.dataset, args.model, args.epochs, args.frac, args.iid)
+    # with open(fn, 'w') as f:
+    #     json.dump(ms_model_deviation, f)
 
     # Save client selection history
     f = open("./{}/client_selection_history.txt".format(args.result_dir), "w")

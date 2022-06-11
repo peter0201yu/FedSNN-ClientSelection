@@ -21,6 +21,7 @@ import models.vgg as ann_models
 import models.resnet as resnet_models
 import models.vgg_spiking_bntt as snn_models_bntt
 import models.simple_conv as simple_model
+import models.simple_conv_mnist as simple_model_mnist
 import models.client_selection as client_selection
 
 import tables
@@ -111,7 +112,9 @@ if __name__ == '__main__':
         model_args = {'num_cls': args.num_classes, 'timesteps': args.timesteps}
         if args.dataset == 'MNIST':
             model_args['img_size'] = 28
-        net = simple_model.Simple_Net(**model_args).cuda()
+            net = simple_model_mnist.Simple_Net_Mnist(**model_args).cuda()
+        else:
+            net = simple_model.Simple_Net(**model_args).cuda()
     else:
         exit('Error: unrecognized model')
     # print(net)

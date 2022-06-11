@@ -9,23 +9,18 @@ def random(num_users, num_selected):
 
 def biggest_loss(local_losses, num_users, num_selected):
     print("Selecting clients by biggest loss")
-    if local_losses == []:
-        return random(num_users, num_selected)
-    ret = sorted(range(len(local_losses)), key=lambda x: local_losses[x])
-    print("Local loss all:", local_losses)
-    loss_locals_selected = [local_losses[i] for i in ret[(-1)*num_selected:]]
+    ret = sorted(list(range(num_users)), key=lambda x: local_losses[x], reverse=True)
+    loss_locals_selected = [local_losses[i] for i in ret[:num_selected]]
     print("Local loss selected:", loss_locals_selected)
-    return ret[(-1)*num_selected:]
 
-def grad_diversity(delta_w_locals_all, num_users, num_selected, available_users):
-    print("Selecting clients by gradient diversity")
-    if delta_w_locals_all == []:
-        return random(num_users, num_selected)
-    
+    return ret[:num_selected]
+
+
+def grad_diversity(delta_w_locals_all, num_users, num_selected):
+    print("Selecting clients by gradient diversity")    
     # Greedy algorithm
     chosen_users = []
-    # unchosen_users = [i for i in range(num_users)]
-    unchosen_users = available_users
+    unchosen_users = [i for i in range(num_users)]
     for i in range(num_selected):
         # print("Unchosen users: ", unchosen_users)
         # Find client that gives largest marginal gain
@@ -96,6 +91,8 @@ def update_norm(delta_w_locals_all, trained_data_size_all, num_users, num_select
     l -= 1
     print("found l: ", l)
 
+    # slight change to the original paper: make sure to choose the clients with prob 1, and then
+    # scale down the probs and make a random selection w.r.t probs
     # equation 7 in paper
     for i in range(num_users):
         if l < num_users and weighted_norms[i] >= sorted_weighted_norms[l]:
@@ -103,25 +100,33 @@ def update_norm(delta_w_locals_all, trained_data_size_all, num_users, num_select
         else:
             probs.append((num_selected + l - num_users) * (weighted_norms[i]) / sum(sorted_weighted_norms[:l]))
     print("Probilities: ", probs)
-    print("Sum of probabilities: ", sum(probs))
 
     picked_clients = []
-    delta_w_locals_all_rescaled = delta_w_locals_all
-    thresholds = [np.random.uniform(0, 1) for _ in range(num_users)]
-    # print(thresholds)
-    trained_data_size_total = sum(trained_data_size_all)
+    prob_dist = []
     for i in range(num_users):
-        if probs[i] >= thresholds[i]:
+        if probs[i] == 1:
             picked_clients.append(i)
-            # for k in delta_w_locals_all[0].keys():
-            #     # rescale by probability and client sampling weight (trained datasize)
-            #     delta_w_locals_all_rescaled[i][k] = torch.mul(delta_w_locals_all_rescaled[i][k].float(), \
-            #                                                 trained_data_size_all[i] / trained_data_size_total / probs[i])
+            prob_dist.append(0)
+        else:
+            prob_dist.append(probs[i])
+
+    # normalize this
+    sum_prob = sum(prob_dist)
+    prob_dist = [prob / sum_prob for prob in prob_dist]
     
-    # problem: there is a chance no one is picked, pick expected user randomly
-    if picked_clients == []:
-        print("No one is picked!")
-        picked_clients = random(num_users, num_selected)
+    newly_picked = list(np.random.choice(range(num_users), size=num_selected - len(picked_clients), replace=False, p=prob_dist))
+    print("already picked: {}, newly_picked: {}".format(picked_clients, newly_picked))
+    picked_clients += newly_picked
+    print("picked: ", picked_clients)
+
+    delta_w_locals_all_rescaled = delta_w_locals_all
+    # This rescaling messes up the result ??
+    # trained_data_size_total = sum(trained_data_size_all)
+    # for i in picked_clients:
+    #     for k in delta_w_locals_all[0].keys():
+    #         # rescale by probability and client sampling weight (trained datasize)
+    #         delta_w_locals_all_rescaled[i][k] = torch.mul(delta_w_locals_all_rescaled[i][k].float(), \
+    #                                                     trained_data_size_all[i] / trained_data_size_total / probs[i])
 
     return picked_clients, delta_w_locals_all_rescaled
 
