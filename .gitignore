@@ -51,7 +51,7 @@ ENV/
 
 CIFAR*
 cifar*
-# *results*
+*results*
 test/
 ddd20/*dataset*/*
 ddd20/data
@@ -60,3 +60,4 @@ nmnist/data
 *rog_script*
 saved_model
 data/
+wandb

@@ -45,15 +45,15 @@ class Simple_Net_Mnist(nn.Module):
         bias_flag = False
 
 
-        self.conv1 = nn.Conv2d(1, 32, kernel_size=5, stride=1, padding=2, bias=bias_flag)
-        self.bntt1 = nn.ModuleList([nn.BatchNorm2d(32, eps=1e-4, momentum=0.1, affine=affine_flag) for i in range(self.batch_num)])
-        self.conv2 = nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1, bias=bias_flag)
-        self.bntt2 = nn.ModuleList([nn.BatchNorm2d(32, eps=1e-4, momentum=0.1, affine=affine_flag) for i in range(self.batch_num)])
+        self.conv1 = nn.Conv2d(1, 64, kernel_size=5, stride=1, padding=2, bias=bias_flag)
+        self.bntt1 = nn.ModuleList([nn.BatchNorm2d(64, eps=1e-4, momentum=0.1, affine=affine_flag) for i in range(self.batch_num)])
+        self.conv2 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=bias_flag)
+        self.bntt2 = nn.ModuleList([nn.BatchNorm2d(64, eps=1e-4, momentum=0.1, affine=affine_flag) for i in range(self.batch_num)])
         self.pool1 = nn.AvgPool2d(kernel_size=8)
 
-        self.fc1 = nn.Linear(288, 32, bias=bias_flag)
-        self.bntt_fc = nn.ModuleList([nn.BatchNorm1d(32, eps=1e-4, momentum=0.1, affine=affine_flag) for i in range(self.batch_num)])
-        self.fc2 = nn.Linear(32, self.num_cls, bias=bias_flag)
+        self.fc1 = nn.Linear(576, 64, bias=bias_flag)
+        self.bntt_fc = nn.ModuleList([nn.BatchNorm1d(64, eps=1e-4, momentum=0.1, affine=affine_flag) for i in range(self.batch_num)])
+        self.fc2 = nn.Linear(64, self.num_cls, bias=bias_flag)
 
         self.conv_list = [self.conv1, self.conv2]
         self.bntt_list = [self.bntt1, self.bntt2, self.bntt_fc]
@@ -80,11 +80,11 @@ class Simple_Net_Mnist(nn.Module):
     def forward(self, inp):
 
         batch_size = inp.size(0)
-        mem_conv1 = torch.zeros(batch_size, 32, self.img_size, self.img_size).cuda()
-        mem_conv2 = torch.zeros(batch_size, 32, self.img_size, self.img_size).cuda()
+        mem_conv1 = torch.zeros(batch_size, 64, self.img_size, self.img_size).cuda()
+        mem_conv2 = torch.zeros(batch_size, 64, self.img_size, self.img_size).cuda()
         mem_conv_list = [mem_conv1, mem_conv2]
 
-        mem_fc1 = torch.zeros(batch_size, 32).cuda()
+        mem_fc1 = torch.zeros(batch_size, 64).cuda()
         mem_fc2 = torch.zeros(batch_size, self.num_cls).cuda()
 
 

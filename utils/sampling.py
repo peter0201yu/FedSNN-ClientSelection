@@ -38,6 +38,7 @@ def mnist_non_iid(dataset, num_classes, num_users, alpha = 0.5):
             proportions = (np.cumsum(proportions)*len(idx_k)).astype(int)[:-1]
             idx_batch = [idx_j + idx.tolist() for idx_j,idx in zip(idx_batch,np.split(idx_k,proportions))]
             min_size = min([len(idx_j) for idx_j in idx_batch])
+            # print("Sampled once")
 
     for j in range(num_users):
         np.random.shuffle(idx_batch[j])

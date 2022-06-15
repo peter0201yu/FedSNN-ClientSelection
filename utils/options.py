@@ -50,11 +50,13 @@ def args_parser():
     parser.add_argument('--iid', action='store_true', help='whether i.i.d or not')
     parser.add_argument('--num_classes', type=int, default=10, help="number of classes")
     parser.add_argument('--num_channels', type=int, default=3, help="number of channels of imges")
+    parser.add_argument('--img_size', type=int, default=32, help="side length of imgs in pixels")
     parser.add_argument('--gpu', type=int, default=0, help="GPU ID, -1 for CPU")
     parser.add_argument('--stopping_rounds', type=int, default=10, help='rounds of early stopping')
     parser.add_argument('--verbose', action='store_true', help='verbose print')
     parser.add_argument('--seed', type=int, default=1, help='random seed (default: 1)')
     parser.add_argument('--eval_every', type=int, default=10, help='Frequency of model evaluation')
+    parser.add_argument('--test_size', type=int, default=10, help='Size of test dataset, used for EMNIST')
     parser.add_argument('--pretrained_model', type=str, default=None, help="Path for the pre-trained mode if any")
     parser.add_argument('--result_dir', type=str, default="results", help="Directory to store results")
     parser.add_argument('--snn', action='store_true', help="Whether to train SNN or ANN")
@@ -63,5 +65,7 @@ def args_parser():
     parser.add_argument('--grad_noise_stdev', type=float, default=0.0, help="Noise level for gradients")
     parser.add_argument('--dvs', action='store_true', help="Whether the input data is DVS")
     parser.add_argument('--modality', type=str, default='aps', help="aps or dvs for the type of data to work on DDD20")
+    parser.add_argument('--wandb', type=str, default=None, help="use wandb to record data and make plot")
+
     args = parser.parse_args()
     return args

@@ -1,1 +1,0 @@
-python main_fed.py --snn --dataset MNIST --num_classes 10 --model simple --optimizer SGD --bs 16 --local_bs 16 --lr 0.1 --lr_reduce 5 --epochs 30 --local_ep 2 --eval_every 5 --num_users 500 --client_selection random --frac 0.01 --candidate_frac 0.04 --gpu 0 --timesteps 10 --straggler_prob 0.0 --grad_noise_stdev 0.0 --result_dir mnist_30_500c20c5_noniid

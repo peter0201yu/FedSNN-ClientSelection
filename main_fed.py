@@ -12,6 +12,7 @@ from pathlib import Path
 from torchvision import datasets, transforms
 import torch
 import torch.nn as nn
+import wandb
 
 from utils.sampling import mnist_iid, mnist_non_iid, cifar_iid, cifar_non_iid, mnist_dvs_iid, mnist_dvs_non_iid, nmnist_iid, nmnist_non_iid
 from utils.options import args_parser
@@ -46,6 +47,10 @@ if __name__ == '__main__':
         torch.backends.cudnn.benchmark = False
     # torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
+    if args.wandb:
+        wandb.init(project="FedSNN", name=args.wandb,
+                    config={"epochs": args.epochs, "num_users": args.num_users, "frac_users": args.frac, "client_selection": args.client_selection, "dataset": args.dataset, "alpha": args.alpha})
+
     dataset_keys = None
     h5fs = None
     # load dataset and split users
@@ -56,7 +61,7 @@ if __name__ == '__main__':
         if args.iid:
             dict_users = cifar_iid(dataset_train, args.num_users)
         else:
-            dict_users = cifar_non_iid(dataset_train, args.num_classes, args.num_users)
+            dict_users = cifar_non_iid(dataset_train, args.num_classes, args.num_users, args.alpha)
     elif args.dataset == 'CIFAR100':
         trans_cifar = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
         dataset_train = datasets.CIFAR100('../data/cifar100', train=True, download=True, transform=trans_cifar)
@@ -64,7 +69,7 @@ if __name__ == '__main__':
         if args.iid:
             dict_users = cifar_iid(dataset_train, args.num_users)
         else:
-            dict_users = cifar_non_iid(dataset_train, args.num_classes, args.num_users)
+            dict_users = cifar_non_iid(dataset_train, args.num_classes, args.num_users, args.alpha)
     elif args.dataset == 'N-MNIST':
         dataset_train, dataset_test = nmnist_train_test("nmnist/data")
         if args.iid:
@@ -78,7 +83,17 @@ if __name__ == '__main__':
         if args.iid:
             dict_users = mnist_iid(dataset_train, args.num_users)
         else:
-            dict_users = mnist_non_iid(dataset_train, args.num_classes, args.num_users)
+            dict_users = mnist_non_iid(dataset_train, args.num_classes, args.num_users, args.alpha)
+    elif args.dataset == 'EMNIST':
+        # same transform and splitting as MNIST
+        trans_mnist = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
+        dataset_train = datasets.EMNIST('../data/emnist', 'bymerge', train=True, download=True, transform=trans_mnist)
+        dataset_test = datasets.EMNIST('../data/emnist', 'bymerge', train=False, download=True, transform=trans_mnist)
+        if args.iid:
+            dict_users = mnist_iid(dataset_train, args.num_users)
+        else:
+            dict_users = mnist_non_iid(dataset_train, args.num_classes, args.num_users, args.alpha)
+    
     else:
         exit('Error: unrecognized dataset')
     # img_size = dataset_train[0][0].shape
@@ -99,9 +114,8 @@ if __name__ == '__main__':
             model_args = {'num_cls': args.num_classes}
             net_glob = resnet_models.Network(**model_args).cuda()
     elif args.model == 'simple':
-        model_args = {'num_cls': args.num_classes, 'timesteps': args.timesteps}
-        if args.dataset == 'MNIST':
-            model_args['img_size'] = 28
+        model_args = {'num_cls': args.num_classes, 'timesteps': args.timesteps, 'img_size': args.img_size}
+        if args.dataset == 'MNIST' or 'EMNIST':
             net_glob = simple_model_mnist.Simple_Net_Mnist(**model_args).cuda()
         else:
             net_glob = simple_model.Simple_Net(**model_args).cuda()
@@ -202,7 +216,7 @@ if __name__ == '__main__':
                     delta_w[k] = w_locals_all[i][k] - w_init[k]
                 delta_w_locals_all.append(delta_w)
             idxs_users = client_selection.grad_diversity(delta_w_locals_all, len(candidates), m)
-        elif args.client_selection == "update_norm":
+        elif args.client_selection == "update_norm" or "update_norm_rescale":
             delta_w_locals_all = []
             w_init = net_glob.state_dict()
             for i in range(len(w_locals_all)):
@@ -210,13 +224,15 @@ if __name__ == '__main__':
                 for k in w_init.keys():
                     delta_w[k] = w_locals_all[i][k] - w_init[k]
                 delta_w_locals_all.append(delta_w)
-            # Need to find number of training examples of each data size
-            idxs_users, delta_w_locals_all_rescaled = client_selection.update_norm(delta_w_locals_all, trained_data_size_all, len(candidates), m)
             
-            # update new weights:
-            for i in range(len(w_locals_all)):
-                for k in w_init.keys():
-                    w_locals_all[i][k] = w_init[k] + delta_w_locals_all_rescaled[i][k]
+            if args.client_selection == "update_norm":
+                idxs_users, delta_w_locals_all_rescaled = client_selection.update_norm(delta_w_locals_all, trained_data_size_all, len(candidates), m)
+            else:
+                idxs_users, delta_w_locals_all_rescaled = client_selection.update_norm(delta_w_locals_all, trained_data_size_all, len(candidates), m, rescale=True)
+                # update new weights:
+                for i in range(len(w_locals_all)):
+                    for k in w_init.keys():
+                        w_locals_all[i][k] = w_init[k] + delta_w_locals_all_rescaled[i][k]
 
         # idxs_users gives the client's index in the candidates list, need to convert
         print("Selected clients:", [candidates[idx] for idx in idxs_users])
@@ -238,7 +254,9 @@ if __name__ == '__main__':
         loss_avg = sum(loss_locals_selected) / len(loss_locals_selected)
         print('Round {:3d}, Average loss {:.3f}'.format(iter, loss_avg))
         loss_train_list.append(loss_avg)
- 
+        if args.wandb:
+            wandb.log({"client_avg_loss":loss_avg, "Round": iter+1})
+
         if iter % args.eval_every == 0:
             # testing
             net_glob.eval()
@@ -246,7 +264,11 @@ if __name__ == '__main__':
             print("Round {:d}, Training accuracy: {:.2f}".format(iter, acc_train))
             acc_test, loss_test = test_img(net_glob, dataset_test, args)
             print("Round {:d}, Testing accuracy: {:.2f}".format(iter, acc_test))
- 
+
+            if args.wandb:
+                wandb.log({"server_train_loss": loss_train, "server_test_loss": loss_test, 
+                            "server_train_acc": acc_train, "server_test_acc": acc_test, "Round": iter+1})
+
             # Add metrics to store
             ms_acc_train_list.append(acc_train)
             ms_acc_test_list.append(acc_test)
@@ -269,6 +291,10 @@ if __name__ == '__main__':
     print("Final Training accuracy: {:.2f}".format(acc_train))
     acc_test, loss_test = test_img(net_glob, dataset_test, args)
     print("Final Testing accuracy: {:.2f}".format(acc_test))
+
+    if args.wandb:
+        wandb.log({"server_train_loss": loss_train, "server_test_loss": loss_test, 
+                    "server_train_acc": acc_train, "server_test_acc": acc_test, "Round": args.epochs})
 
     # Add metrics to store
     ms_acc_train_list.append(acc_train)

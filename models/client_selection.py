@@ -72,16 +72,18 @@ def grad_diff(delta_w_locals_all, i, j):
     return diff
 
 # Pick clients based on norm of updates (Alg1 in Optimal Client Sampling paper)
-def update_norm(delta_w_locals_all, trained_data_size_all, num_users, num_selected):
+def update_norm(delta_w_locals_all, trained_data_size_all, num_users, num_selected, rescale=False):
     print("Selecting clients by update norm")
     
+    trained_data_size_total = sum(trained_data_size_all)
     probs = []
     weighted_norms = []
+    weights = [trained_data_size_all[i] / trained_data_size_total for i in range(num_users)]
     for i in range(num_users):
         norm = 0
         for k in delta_w_locals_all[0].keys():
             norm += float(torch.linalg.norm(delta_w_locals_all[i][k].float()))
-        weighted_norms.append(norm / 10000 * trained_data_size_all[i]) # divide by 10000 to prevent overflow
+        weighted_norms.append(norm * weights[i]) 
     
     sorted_weighted_norms = sorted(weighted_norms)
     print("sorted weight norms: ", sorted_weighted_norms)
@@ -89,7 +91,7 @@ def update_norm(delta_w_locals_all, trained_data_size_all, num_users, num_select
     while l <= num_users and (num_selected + l - num_users <= (sum(sorted_weighted_norms[:l])/sorted_weighted_norms[l-1])):
         l += 1
     l -= 1
-    print("found l: ", l)
+    # print("found l: ", l)
 
     # slight change to the original paper: make sure to choose the clients with prob 1, and then
     # scale down the probs and make a random selection w.r.t probs
@@ -113,20 +115,19 @@ def update_norm(delta_w_locals_all, trained_data_size_all, num_users, num_select
     # normalize this
     sum_prob = sum(prob_dist)
     prob_dist = [prob / sum_prob for prob in prob_dist]
-    
     newly_picked = list(np.random.choice(range(num_users), size=num_selected - len(picked_clients), replace=False, p=prob_dist))
-    print("already picked: {}, newly_picked: {}".format(picked_clients, newly_picked))
+    # print("already picked: {}, newly_picked: {}".format(picked_clients, newly_picked))
     picked_clients += newly_picked
     print("picked: ", picked_clients)
 
     delta_w_locals_all_rescaled = delta_w_locals_all
-    # This rescaling messes up the result ??
-    # trained_data_size_total = sum(trained_data_size_all)
-    # for i in picked_clients:
-    #     for k in delta_w_locals_all[0].keys():
-    #         # rescale by probability and client sampling weight (trained datasize)
-    #         delta_w_locals_all_rescaled[i][k] = torch.mul(delta_w_locals_all_rescaled[i][k].float(), \
-    #                                                     trained_data_size_all[i] / trained_data_size_total / probs[i])
+
+    if rescale:
+        # This rescaling messes up the result ??
+        for i in picked_clients:
+            for k in delta_w_locals_all[0].keys():
+                # rescale by probability and client sampling weight (trained datasize)
+                delta_w_locals_all_rescaled[i][k] = torch.mul(delta_w_locals_all_rescaled[i][k].float(), weights[i] / probs[i])
 
     return picked_clients, delta_w_locals_all_rescaled
 

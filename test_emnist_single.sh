@@ -1,0 +1,1 @@
+python single_model.py --snn --dataset EMNIST --img_size 28 --num_classes 47 --model simple --optimizer SGD --bs 32 --local_bs 32 --lr 0.1 --lr_reduce 5 --epochs 50 --local_ep 2 --eval_every 5 --num_users 10 --test_size 10000 --frac 0.2 --gpu 0 --timesteps 10 --straggler_prob 0.0 --grad_noise_stdev 0.0 --result_dir single_model_EMNIST --iid --verbose

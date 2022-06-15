@@ -13,7 +13,7 @@ from torchvision import datasets, transforms
 import torch
 import torch.nn as nn
 
-from utils.sampling import mnist_iid, mnist_noniid, cifar_iid, cifar_non_iid, mnist_dvs_iid, mnist_dvs_non_iid, nmnist_iid, nmnist_non_iid
+from utils.sampling import mnist_iid, mnist_non_iid, cifar_iid, cifar_non_iid, mnist_dvs_iid, mnist_dvs_non_iid, nmnist_iid, nmnist_non_iid
 from utils.options import args_parser
 from torch.utils.data import DataLoader, Dataset, RandomSampler
 from models.test import test_img
@@ -89,6 +89,15 @@ if __name__ == '__main__':
             dict_users = mnist_iid(dataset_train, args.num_users)
         else:
             dict_users = mnist_non_iid(dataset_train, args.num_classes, args.num_users)
+    elif args.dataset == 'EMNIST':
+        # same transform and splitting as MNIST
+        trans_mnist = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
+        dataset_train = datasets.EMNIST('../data/emnist', 'bymerge', train=True, download=True, transform=trans_mnist)
+        dataset_test = datasets.EMNIST('../data/emnist', 'bymerge', train=False, download=True, transform=trans_mnist)
+        if args.iid:
+            dict_users = mnist_iid(dataset_train, args.num_users)
+        else:
+            dict_users = mnist_non_iid(dataset_train, args.num_classes, args.num_users)
     else:
         exit('Error: unrecognized dataset')
     # img_size = dataset_train[0][0].shape
@@ -109,9 +118,8 @@ if __name__ == '__main__':
             model_args = {'num_cls': args.num_classes}
             net = resnet_models.Network(**model_args).cuda()
     elif args.model == 'simple':
-        model_args = {'num_cls': args.num_classes, 'timesteps': args.timesteps}
-        if args.dataset == 'MNIST':
-            model_args['img_size'] = 28
+        model_args = {'num_cls': args.num_classes, 'timesteps': args.timesteps, 'img_size': args.img_size}
+        if args.dataset == 'MNIST' or 'EMNIST':
             net = simple_model_mnist.Simple_Net_Mnist(**model_args).cuda()
         else:
             net = simple_model.Simple_Net(**model_args).cuda()
@@ -130,9 +138,10 @@ if __name__ == '__main__':
 
     loss_func = nn.CrossEntropyLoss()
     # ldr_train = DataLoader(DatasetSplit(dataset=dataset_train, idxs=dict_users[0]), batch_size=args.local_bs, shuffle=True, drop_last=True)
-    num_samples = len(dataset_train) // 10
+    num_samples = len(dataset_train) // 100
     sampler = RandomSampler(dataset_train, num_samples=num_samples)
     ldr_train = DataLoader(dataset_train, sampler=sampler, batch_size=args.local_bs, drop_last=True)
+    print("Data: ", len(ldr_train.dataset))
 
     net = torch.nn.DataParallel(net)
     for epoch in range(args.epochs):
@@ -224,4 +233,4 @@ if __name__ == '__main__':
         })
     metrics_df.to_csv('./{}/fed_stats_{}_{}_{}_C{}_iid{}.csv'.format(args.result_dir, args.dataset, args.model, args.epochs, args.frac, args.iid), sep='\t')
 
-    torch.save(net.state_dict(), './{}/saved_model'.format(args.result_dir))
+    # torch.save(net.state_dict(), './{}/saved_model'.format(args.result_dir))
