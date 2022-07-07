@@ -1,0 +1,1 @@
+CF10_100c20c10_0.2_handpick: mean of mean 640.6400000000001, mean of std 272.7665836481677

@@ -20,9 +20,10 @@ from models.test import test_img
 import models.vgg as ann_models
 import models.resnet as resnet_models
 import models.vgg_spiking_bntt as snn_models_bntt
-import models.simple_conv as simple_model
-import models.simple_conv_mnist as simple_model_mnist
+from models.simple_conv_cf10 import Simple_CF10_BNTT, VGG5_CF10_NoBNTT
+from models.simple_conv_mnist import Simple_Mnist_BNTT, Simple_Mnist_NoBNTT
 import models.client_selection as client_selection
+from RatevsDirect.util import accuracy, AverageMeter, adjust_learning_rate
 
 import tables
 import yaml
@@ -119,13 +120,39 @@ if __name__ == '__main__':
             net = resnet_models.Network(**model_args).cuda()
     elif args.model == 'simple':
         model_args = {'num_cls': args.num_classes, 'timesteps': args.timesteps, 'img_size': args.img_size}
-        if args.dataset == 'MNIST' or 'EMNIST':
-            net = simple_model_mnist.Simple_Net_Mnist(**model_args).cuda()
+        if args.dataset == 'MNIST' or args.dataset == 'EMNIST':
+            if args.bntt:
+                model_args['leak_mem'] = 0.5
+                net = Simple_Mnist_BNTT(**model_args).cuda()
+            else:
+                model_args['leak_mem'] = 0.5
+                net = Simple_Mnist_NoBNTT(**model_args).cuda()
         else:
-            net = simple_model.Simple_Net(**model_args).cuda()
+            if args.bntt:
+                model_args['leak_mem'] = 0.5
+                net = Simple_CF10_BNTT(**model_args).cuda()
+            else:
+                model_args['leak_mem'] = 0.5
+                net = VGG5_CF10_NoBNTT(**model_args).cuda()
     else:
         exit('Error: unrecognized model')
     # print(net)
+
+    # evaluate random model
+    # net = torch.nn.DataParallel(net)
+    # net.eval()
+    # acc_train, loss_train = test_img(net, dataset_test, args)
+    # print("Random Model Test accuracy: {:.2f}".format(acc_train))
+
+    # Print the SNN model, optimizer, and simulation parameters
+    print("********** SNN simulation parameters **********")
+    print("Simulation # time-step : {}".format(args.timesteps))
+    print("Membrane decay rate : {0:.2f}\n".format(model_args["leak_mem"]))
+    print("********** SNN learning parameters **********")
+    print("Backprop optimizer     : {}".format(args.optimizer))
+    print("Number of epochs       : {}".format(args.epochs))
+    print("Learning rate          : {}".format(args.lr))
+
 
     # training
     loss_train_list = []
@@ -141,21 +168,20 @@ if __name__ == '__main__':
     num_samples = len(dataset_train) // 100
     sampler = RandomSampler(dataset_train, num_samples=num_samples)
     ldr_train = DataLoader(dataset_train, sampler=sampler, batch_size=args.local_bs, drop_last=True)
-    print("Data: ", len(ldr_train.dataset))
+    # print("Data: ", len(ldr_train.dataset))
 
-    net = torch.nn.DataParallel(net)
+    # train and update
+    if args.optimizer == "SGD":
+        optimizer = torch.optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay = 1e-4)
+    elif args.optimizer == "Adam":
+        optimizer = torch.optim.Adam(net.parameters(), lr = args.lr)
+    else:
+        print("Invalid optimizer")
+
     for epoch in range(args.epochs):
         print("ROUND ", epoch)
         net.train()
         
-        # train and update
-        if args.optimizer == "SGD":
-            optimizer = torch.optim.SGD(net.parameters(), lr=args.lr, momentum=args.momentum, weight_decay = args.weight_decay)
-        elif args.optimizer == "Adam":
-            optimizer = torch.optim.Adam(net.parameters(), lr = args.lr, weight_decay = args.weight_decay, amsgrad = True)
-        else:
-            print("Invalid optimizer")
-
         epoch_loss = []
         trained_data_size = 0
         for local_ep in range(args.local_ep):

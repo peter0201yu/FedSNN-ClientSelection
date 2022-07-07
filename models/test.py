@@ -16,12 +16,14 @@ def test_img(net_g, datatest, args):
     test_loss = 0
     correct = 0
     if args.test_size:
-        sampler = RandomSampler(datatest, num_samples=args.test_size)
+        test_size = min(len(datatest), args.test_size)
+        sampler = RandomSampler(datatest, num_samples=test_size)
         data_loader = DataLoader(datatest, sampler=sampler, batch_size=args.bs)
-        test_size = args.test_size
     else:
         data_loader = DataLoader(datatest, batch_size=args.bs)
         test_size = len(data_loader.dataset)
+    
+    print("Testing on {} images".format(test_size))
     # l = len(data_loader)
     for idx, (data, target) in enumerate(data_loader):
         if args.gpu != -1:

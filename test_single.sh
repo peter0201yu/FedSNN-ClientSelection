@@ -1,0 +1,1 @@
+python fake_fed.py --snn --dataset CIFAR10 --img_size 32 --num_classes 10 --model VGG9 --optimizer SGD --bs 32 --local_bs 32 --lr 0.1 --lr_reduce 5 --epochs 60 --local_ep 5 --eval_every 1 --num_users 100 --test_size 10000 --alpha 2 --gpu 0 --timesteps 8 --straggler_prob 0.0 --grad_noise_stdev 0.0 --result_dir fake_fed --project FedSNN-Experiments --wandb CF10_100c1_2_fake_fed

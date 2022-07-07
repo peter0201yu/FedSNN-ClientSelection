@@ -91,15 +91,16 @@ def cifar_iid(dataset, num_users):
         all_idxs = list(set(all_idxs) - dict_users[i])
     return dict_users
 
-def cifar_non_iid(dataset, num_classes, num_users, alpha = 0.5):
+def cifar_non_iid(dataset, num_classes, num_users, alpha = 0.5, min_datasize = 32):
     N = len(dataset)
     min_size = 0
     print("Dataset size:", N)
 
     dict_users = {}
-    while min_size < 10:
+    while True:
         idx_batch = [[] for _ in range(num_users)]
-        for k in range(num_classes):
+        k = 0
+        while k < num_classes:
             idx_k = np.where(np.asarray(dataset.targets) == k)[0]
             np.random.shuffle(idx_k)
             proportions = np.random.dirichlet(np.repeat(alpha, num_users))
@@ -107,8 +108,23 @@ def cifar_non_iid(dataset, num_classes, num_users, alpha = 0.5):
             proportions = np.array([p*(len(idx_j)<N/num_users) for p,idx_j in zip(proportions,idx_batch)])
             proportions = proportions/proportions.sum()
             proportions = (np.cumsum(proportions)*len(idx_k)).astype(int)[:-1]
+            class_split = np.split(idx_k, proportions)
+            min_size = min([len(c) for c in class_split])
+            # print("class {}, min user size {}".format(k, min_size))
+            # if min_size < 10:
+            #     print("class {}, min user size {}".format(k, min_size))
+            #     continue
             idx_batch = [idx_j + idx.tolist() for idx_j,idx in zip(idx_batch,np.split(idx_k,proportions))]
-            min_size = min([len(idx_j) for idx_j in idx_batch])
+            k+=1
+        
+        # check minimum length of user dataset is bigger than batchsize
+        is_valid = True
+        for j in range(num_users):
+            if len(idx_batch[j]) < min_datasize:
+                is_valid = False
+                break
+        if is_valid:
+            break
 
     for j in range(num_users):
         np.random.shuffle(idx_batch[j])

@@ -88,6 +88,8 @@ class VGG(nn.Module):
                             )
         
         self._initialize_weights2()
+
+        print (">>>>>>>>>>>>>>>>> {} >>>>>>>>>>>>>>>>>>>>>>>".format(vgg_name))
         
 
     def forward(self, x):

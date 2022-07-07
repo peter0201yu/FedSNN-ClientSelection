@@ -10,11 +10,26 @@ def random(num_users, num_selected):
 def biggest_loss(local_losses, num_users, num_selected):
     print("Selecting clients by biggest loss")
     ret = sorted(list(range(num_users)), key=lambda x: local_losses[x], reverse=True)
-    loss_locals_selected = [local_losses[i] for i in ret[:num_selected]]
-    print("Local loss selected:", loss_locals_selected)
-
+    # loss_locals_selected = [local_losses[i] for i in ret[:num_selected]]
+    # print("Local loss selected:", loss_locals_selected)
     return ret[:num_selected]
 
+def middle_loss(local_losses, num_users, num_selected):
+    print("Selecting clients with middle loss")
+    ret = sorted(list(range(num_users)), key=lambda x: local_losses[x], reverse=True)
+    start = (num_users-num_selected)//2
+    return ret[start : start+num_selected]
+
+def smallest_loss(local_losses, num_users, num_selected):
+    print("Selecting clients with smallest loss")
+    ret = sorted(list(range(num_users)), key=lambda x: local_losses[x], reverse=False)
+    return ret[:num_selected]
+
+def mixed_loss(local_losses, num_users, num_selected):
+    print("Selecting clients with mixed loss (choosing both big and small)")
+    ret = sorted(list(range(num_users)), key=lambda x: local_losses[x], reverse=False)
+    interval = num_users // num_selected
+    return [ret[interval*i] for i in range(num_selected)]
 
 def grad_diversity(delta_w_locals_all, num_users, num_selected):
     print("Selecting clients by gradient diversity")    
@@ -58,7 +73,7 @@ def sum_grad_diff(delta_w_locals_all, num_users, l):
                 min_diff = diff
         sum_diff += min_diff
     
-    print("If we choose users {}, get sum diff {}".format(l, sum_diff))
+    # print("If we choose users {}, get sum diff {}".format(l, sum_diff))
     
     return sum_diff
 
@@ -71,9 +86,57 @@ def grad_diff(delta_w_locals_all, i, j):
     # print("Clients {} and {} has diff {}".format(i, j, diff))
     return diff
 
+def spike_diversity(activities, num_users, num_selected):
+    print("Selecting clients by spike activity diversity")
+    # Greedy algorithm
+    chosen_users = []
+    unchosen_users = [i for i in range(num_users)]
+    for i in range(num_selected):
+        # print("Unchosen users: ", unchosen_users)
+        # Find client that gives largest marginal gain
+        min_diff = -1
+        chosen = -1
+        for j in unchosen_users:
+            l = copy.deepcopy(chosen_users)
+            l.append(j)
+            diff = sum_spike_diff(activities, num_users, l)
+
+            if min_diff < 0 or diff < min_diff:
+                min_diff = diff
+                chosen = j
+        print("Selected client {} with diff {}".format(chosen, min_diff))
+        
+        chosen_users.append(chosen)
+        unchosen_users.remove(chosen)
+
+    # print(chosen_users)
+    return chosen_users
+
+def sum_spike_diff(activities, num_users, l):
+    sum_diff = 0
+    cos = torch.nn.CosineSimilarity(dim=0)
+    for i in range(num_users):
+        # find user in l with closest activity to activities[i]
+        min_diff = -1
+        active_layer_count = 9
+        for j in l:
+            print("--------------------------")
+            print(activities[i], activities[j])
+            # Find spike activity difference between users
+            diff = sum([cos(activities[i], activities[j]).item() for layer in range(active_layer_count)])
+            print(diff)
+            print("--------------------------")
+            if min_diff < 0 or diff < min_diff:
+                min_diff = diff
+        sum_diff += min_diff
+    
+    # print("If we choose users {}, get sum diff {}".format(l, sum_diff))
+    
+    return sum_diff
+
 # Pick clients based on norm of updates (Alg1 in Optimal Client Sampling paper)
 def update_norm(delta_w_locals_all, trained_data_size_all, num_users, num_selected, rescale=False):
-    print("Selecting clients by update norm")
+    print("Selecting clients by update norm, rescale = ", rescale)
     
     trained_data_size_total = sum(trained_data_size_all)
     probs = []

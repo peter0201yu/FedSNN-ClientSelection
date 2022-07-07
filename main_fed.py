@@ -23,8 +23,8 @@ from models.test import test_img
 import models.vgg as ann_models
 import models.resnet as resnet_models
 import models.vgg_spiking_bntt as snn_models_bntt
-import models.simple_conv as simple_model
-import models.simple_conv_mnist as simple_model_mnist
+from models.simple_conv_cf10 import Simple_CF10_BNTT
+from models.simple_conv_mnist import Simple_Mnist_BNTT, Simple_Mnist_NoBNTT, Simple_Mnist_BNTT_Rate
 import models.client_selection as client_selection
 
 import tables
@@ -48,8 +48,9 @@ if __name__ == '__main__':
     # torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
     if args.wandb:
-        wandb.init(project="FedSNN", name=args.wandb,
-                    config={"epochs": args.epochs, "num_users": args.num_users, "frac_users": args.frac, "client_selection": args.client_selection, "dataset": args.dataset, "alpha": args.alpha})
+        wandb.init(project=args.project, name=args.wandb,
+                    config={"epochs": args.epochs, "num_users": args.num_users, "frac_users": args.frac, "client_selection": args.client_selection, "dataset": args.dataset, "alpha": args.alpha, "candidate_selection": args.candidate_selection, 
+                    "candidate_frac": args.candidate_frac, "gamma": args.gamma})
 
     dataset_keys = None
     h5fs = None
@@ -98,6 +99,9 @@ if __name__ == '__main__':
         exit('Error: unrecognized dataset')
     # img_size = dataset_train[0][0].shape
 
+    print("dict_users: ", [len(ds) for ds in dict_users.values()])
+
+
     # build model
     model_args = {'args': args}
     if args.model[0:3].lower() == 'vgg':
@@ -115,10 +119,21 @@ if __name__ == '__main__':
             net_glob = resnet_models.Network(**model_args).cuda()
     elif args.model == 'simple':
         model_args = {'num_cls': args.num_classes, 'timesteps': args.timesteps, 'img_size': args.img_size}
-        if args.dataset == 'MNIST' or 'EMNIST':
-            net_glob = simple_model_mnist.Simple_Net_Mnist(**model_args).cuda()
+        if args.dataset == 'MNIST' or args.dataset == 'EMNIST':
+            if args.bntt:
+                if args.direct:
+                    net_glob = Simple_Mnist_BNTT(**model_args).cuda()
+                else:
+                    net_glob = Simple_Mnist_BNTT_Rate(**model_args).cuda()
+            else:
+                model_args['leak_mem'] = 0.5
+                net_glob = Simple_Mnist_NoBNTT(**model_args).cuda()
         else:
-            net_glob = simple_model.Simple_Net(**model_args).cuda()
+            if args.bntt:
+                net = Simple_CF10_BNTT(**model_args).cuda()
+            else:
+                model_args['leak_mem'] = 0.5
+                net = VGG5_CF10_NoBNTT(**model_args).cuda()
     else:
         exit('Error: unrecognized model')
     print(net_glob)
@@ -162,35 +177,96 @@ if __name__ == '__main__':
     lr_interval = []
     for value in values:
         lr_interval.append(int(float(value)*args.epochs))
+    print("lr_interval: ", lr_interval)
 
     # Define Fed Learn object
     fl = FedLearn(args)
 
-    client_selection_history = []
+    client_selection_history, client_set, dropped_clients = [], set(), []
+
+    # federated learning constants 
+    num_candidates = max(int(args.candidate_frac * args.num_users), 1)
+    m = max(int(args.frac * args.num_users), 1)
+    dataset_size = sum([len(dict_users[i]) for i in range(args.num_users)])
+    data_probs = [float(len(dict_users[i]))/dataset_size for i in range(args.num_users)]
+    chosen_candidates, chosen_users = None, None
 
     for iter in range(args.epochs):
+        print("Learning rate: ", args.lr)
         net_glob.train()
         w_locals_selected, loss_locals_selected = [], []
         w_locals_all, loss_locals_all = [], []
         trained_data_size_all = []
         
         candidates = [idx for idx in range(args.num_users) if len(dict_users[idx]) > args.bs]
-        if args.client_selection == "random" and args.candidate_frac:
-            candidate_num = max(int(args.candidate_frac * args.num_users),1)
-            candidates = np.random.choice(range(args.num_users), size=candidate_num, replace=False)
-        elif args.candidate_frac:
-            # Choose preliminary candidate client set: improve speed for client selection algorithm
-            dataset_size = sum([len(dict_users[i]) for i in range(args.num_users)])
-            probs = [float(len(dict_users[i]))/dataset_size for i in range(args.num_users)]
-            candidate_num = max(int(args.candidate_frac * args.num_users),1)
-            candidates = np.random.choice(range(args.num_users), size=candidate_num, replace=False, p=probs)
+        if args.candidate_selection == "random":
+            print("Selecting candidates randomly")
+            candidates = np.random.choice(range(args.num_users), size=num_candidates, replace=False)
+        elif args.candidate_selection == "loop":
+            print("Selecting candidates in a loop")
+            start = (num_candidates * round) % num_users
+            end = min(num_users, start + num_candidates)
+            candidates = [i for i in range(start, end)]
+        elif args.candidate_selection == "data_amount":
+            print("Selecting candidates based on amount of data")
+            candidates = np.random.choice(range(args.num_users), size=num_candidates, replace=False, p=data_probs)
+        elif args.candidate_selection == "reduce_collision":
+            print("Selecting candidates based on prob to reduce collision")
+            if chosen_candidates is not None:
+                for c in chosen_candidates:
+                    data_probs[c] /= args.gamma
+                for c in chosen_users:
+                    data_probs[c] /= args.gamma
+                sum_prob = sum(data_probs)
+                data_probs = [prob / sum_prob for prob in data_probs]
+            candidates = np.random.choice(range(args.num_users), size=num_candidates, replace=False, p=data_probs)
+        elif args.candidate_selection == "avoid_bad":
+            print("Selecting candidates by avoiding ones that causes decrease in train acc")
+            if chosen_candidates is not None and ms_acc_test_list[-1] < ms_acc_test_list[-2]:
+                if iter >= 10 and ms_acc_train_list[-2] - ms_acc_train_list[-1] > 5:
+                    # 5% drop in accuracy after 10 epochs, do not train again with these clients
+                    for c in chosen_users:
+                        data_probs[c] = 0
+                    dropped_clients.append((iter+1, chosen_users))
+                # avoid choosing them again
+                for c in chosen_candidates:
+                    data_probs[c] /= args.gamma
+                for c in chosen_users:
+                    data_probs[c] /= args.gamma
+                sum_prob = sum(data_probs)
+                data_probs = [prob / sum_prob for prob in data_probs]
+            candidates = np.random.choice(range(args.num_users), size=num_candidates, replace=False, p=data_probs)
+        elif args.candidate_selection == "keep_good_avoid_bad":
+            print("Selecting candidates by continuing with ones that cause increase in train acc")
+            if chosen_candidates is not None and ms_acc_test_list[-1] - ms_acc_test_list[-2] > 3:
+                for c in chosen_candidates:
+                    data_probs[c] *= args.gamma
+                # for c in chosen_users:
+                #     data_probs[c] *= args.gamma
+                sum_prob = sum(data_probs)
+                data_probs = [prob / sum_prob for prob in data_probs]
+            elif chosen_candidates is not None:
+                if iter >= 10 and ms_acc_train_list[-2] - ms_acc_train_list[-1] > 5:
+                    # 5% drop in accuracy after 10 epochs, do not train again with these clients
+                    for c in chosen_users:
+                        data_probs[c] = 0
+                    dropped_clients.append((iter+1, chosen_users))
+                # avoid choosing them again
+                for c in chosen_candidates:
+                    data_probs[c] /= args.gamma
+                for c in chosen_users:
+                    data_probs[c] /= args.gamma
+                sum_prob = sum(data_probs)
+                data_probs = [prob / sum_prob for prob in data_probs]
+        
+            candidates = np.random.choice(range(args.num_users), size=num_candidates, replace=False, p=data_probs)
 
+        chosen_candidates = copy.deepcopy(candidates)
         print("candidate clients: ", candidates)
-
+        
         # for idx in idxs_users:
         # Do local update in all the clients # Not required (local updates in only the selected clients is enough) for normal experiments but neeeded for model deviation analysis
         for idx in candidates:
-            print("len(dict_users[idx]): ", len(dict_users[idx]))
             local = LocalUpdate(args=args, dataset=dataset_train, idxs=dict_users[idx]) # idxs needs the list of indices assigned to this particular client
             model_copy = type(net_glob.module)(**model_args) # get a new instance
             model_copy = nn.DataParallel(model_copy)
@@ -199,13 +275,13 @@ if __name__ == '__main__':
             w_locals_all.append(copy.deepcopy(w))
             loss_locals_all.append(copy.deepcopy(loss))
             trained_data_size_all.append(trained_data_size)
-        
+
+        # print("local loss: ", loss_locals_all)
         # print("training data distribution: ", trained_data_size_all)
         
-        m = max(int(args.frac * args.num_users), 1)
-        if not args.client_selection or args.client_selection == "random":
+        if args.client_selection == "random":
             idxs_users = client_selection.random(len(candidates), m)
-        elif args.client_selection == "biggest_loss":
+        elif args.client_selection == "biggest_train_loss":
             idxs_users = client_selection.biggest_loss(loss_locals_all, len(candidates), m)
         elif args.client_selection == "grad_diversity":
             delta_w_locals_all = []
@@ -216,7 +292,7 @@ if __name__ == '__main__':
                     delta_w[k] = w_locals_all[i][k] - w_init[k]
                 delta_w_locals_all.append(delta_w)
             idxs_users = client_selection.grad_diversity(delta_w_locals_all, len(candidates), m)
-        elif args.client_selection == "update_norm" or "update_norm_rescale":
+        elif args.client_selection == "update_norm" or args.client_selection == "update_norm_rescale":
             delta_w_locals_all = []
             w_init = net_glob.state_dict()
             for i in range(len(w_locals_all)):
@@ -228,15 +304,32 @@ if __name__ == '__main__':
             if args.client_selection == "update_norm":
                 idxs_users, delta_w_locals_all_rescaled = client_selection.update_norm(delta_w_locals_all, trained_data_size_all, len(candidates), m)
             else:
-                idxs_users, delta_w_locals_all_rescaled = client_selection.update_norm(delta_w_locals_all, trained_data_size_all, len(candidates), m, rescale=True)
+                idxs_users, delta_w_locals_all_rescaled = client_selection.update_norm(delta_w_locals_all, trained_data_size_all, len(candidates), m, rescale=(True if iter % 5 != 0 else False) )
                 # update new weights:
                 for i in range(len(w_locals_all)):
                     for k in w_init.keys():
                         w_locals_all[i][k] = w_init[k] + delta_w_locals_all_rescaled[i][k]
+        elif args.client_selection == "hybrid":
+            if iter%2:
+                delta_w_locals_all = []
+                w_init = net_glob.state_dict()
+                for i in range(len(w_locals_all)):
+                    delta_w = {}
+                    for k in w_init.keys():
+                        delta_w[k] = w_locals_all[i][k] - w_init[k]
+                    delta_w_locals_all.append(delta_w)
+                idxs_users = client_selection.grad_diversity(delta_w_locals_all, len(candidates), m)
+            else:
+                idxs_users = client_selection.biggest_loss(loss_locals_all, len(candidates), m)
 
         # idxs_users gives the client's index in the candidates list, need to convert
-        print("Selected clients:", [candidates[idx] for idx in idxs_users])
-        client_selection_history.append([candidates[idx] for idx in idxs_users])
+        chosen_users = [candidates[idx] for idx in idxs_users]
+        print("Selected clients:", chosen_users)
+        client_selection_history.append(chosen_users)
+        client_set |= set(chosen_users)
+        if args.wandb:
+            wandb.log({"diff_client_num":len(client_set), "Round": iter+1})
+        
 
         for idx in idxs_users:
             w_locals_selected.append(copy.deepcopy(w_locals_all[idx]))
@@ -322,15 +415,19 @@ if __name__ == '__main__':
         })
     metrics_df.to_csv('./{}/fed_stats_{}_{}_{}_C{}_iid{}.csv'.format(args.result_dir, args.dataset, args.model, args.epochs, args.frac, args.iid), sep='\t')
 
-    torch.save(net_glob.module.state_dict(), './{}/saved_model'.format(args.result_dir))
+    # torch.save(net_glob.module.state_dict(), './{}/saved_model'.format(args.result_dir))
 
     # fn = './{}/model_deviation_{}_{}_{}_C{}_iid{}.json'.format(args.result_dir, args.dataset, args.model, args.epochs, args.frac, args.iid)
     # with open(fn, 'w') as f:
     #     json.dump(ms_model_deviation, f)
 
-    # Save client selection history
+    # Save client selection history and count total number of clients that has been chosen at least once
     f = open("./{}/client_selection_history.txt".format(args.result_dir), "w")
     f.write("Client selection history\n")
+    s = set()
     for i in range(len(client_selection_history)):
-        f.write("Round {}, selected: {} \n".format(i, client_selection_history[i]))
+        f.write("Round {}, selected: {} \n".format(i+1, client_selection_history[i]))
+    f.write("Selected {} different clients\n".format(len(client_set)))
+    for c in dropped_clients:
+        f.write("Round {}, never again choosing {}\n".format(c[0], c[1]))
     f.close()

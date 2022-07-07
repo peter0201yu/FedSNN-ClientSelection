@@ -32,8 +32,10 @@ def args_parser():
     parser.add_argument('--momentum', type=float, default=0.9, help="SGD momentum (default: 0.5)")
     parser.add_argument('--split', type=str, default='user', help="train-test split type, user or sample")
 
-    parser.add_argument('--client_selection', type=str, default=None, help='client selection strategy')
-    parser.add_argument('--candidate_frac', type=float, default=None, help='the fraction of candidates in training: d')
+    parser.add_argument('--client_selection', type=str, default="random", help='client selection strategy')
+    parser.add_argument('--candidate_selection', type=str, default="random", help='candidate selection strategy')
+    parser.add_argument('--candidate_frac', type=float, default=0.1, help='the fraction of candidates in training: d')
+    parser.add_argument('--gamma', type=float, default=2, help='divide the prob by gamma after client is chosen')
 
     # model arguments
     parser.add_argument('--model', type=str, default='mlp', help='model name')
@@ -44,6 +46,8 @@ def args_parser():
     parser.add_argument('--num_filters', type=int, default=32, help="number of filters for conv nets")
     parser.add_argument('--max_pool', type=str, default='True',
                         help="Whether use max pooling rather than strided convolutions")
+    parser.add_argument('--bntt', action='store_true', help='whether use bntt or not')
+    parser.add_argument('--direct', action='store_true', help='whether use direct or rate coding')
 
     # other arguments
     parser.add_argument('--dataset', type=str, default='mnist', help="name of dataset")
@@ -55,8 +59,9 @@ def args_parser():
     parser.add_argument('--stopping_rounds', type=int, default=10, help='rounds of early stopping')
     parser.add_argument('--verbose', action='store_true', help='verbose print')
     parser.add_argument('--seed', type=int, default=1, help='random seed (default: 1)')
-    parser.add_argument('--eval_every', type=int, default=10, help='Frequency of model evaluation')
-    parser.add_argument('--test_size', type=int, default=10, help='Size of test dataset, used for EMNIST')
+    parser.add_argument('--eval_every', type=int, default=10, help='frequency of model evaluation')
+    parser.add_argument('--test_size', type=int, default=None, help='size of test dataset, used for EMNIST')
+    parser.add_argument('--train_frac', type=float, default=None, help='frac of train dataset, used for EMNIST')
     parser.add_argument('--pretrained_model', type=str, default=None, help="Path for the pre-trained mode if any")
     parser.add_argument('--result_dir', type=str, default="results", help="Directory to store results")
     parser.add_argument('--snn', action='store_true', help="Whether to train SNN or ANN")
@@ -65,6 +70,7 @@ def args_parser():
     parser.add_argument('--grad_noise_stdev', type=float, default=0.0, help="Noise level for gradients")
     parser.add_argument('--dvs', action='store_true', help="Whether the input data is DVS")
     parser.add_argument('--modality', type=str, default='aps', help="aps or dvs for the type of data to work on DDD20")
+    parser.add_argument('--project', type=str, default='FedSNN', help="project name for wandb, FedSNN or FedSNN-candidate")
     parser.add_argument('--wandb', type=str, default=None, help="use wandb to record data and make plot")
 
     args = parser.parse_args()

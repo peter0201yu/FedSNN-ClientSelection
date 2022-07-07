@@ -113,12 +113,14 @@ class SNN_VGG9_BNTT(nn.Module):
         mem_fc1 = torch.zeros(batch_size, 1024).cuda()
         mem_fc2 = torch.zeros(batch_size, self.num_cls).cuda()
 
-
+        active_layer_count = 9
+        activity = torch.zeros(active_layer_count).cuda()
 
         for t in range(self.timesteps):
 
             spike_inp = PoissonGen(inp)
             out_prev = spike_inp
+            activity[0] += torch.count_nonzero(spike_inp.detach())/torch.numel(spike_inp.detach())
 
             for i in range(len(self.conv_list)):
                 mem_conv_list[i] = self.leak_mem * mem_conv_list[i] + self.bntt_list[i][t](self.conv_list[i](out_prev))
@@ -129,15 +131,13 @@ class SNN_VGG9_BNTT(nn.Module):
                 mem_conv_list[i] = mem_conv_list[i] - rst
                 out_prev = out.clone()
 
-
                 if self.pool_list[i] is not False:
                     out = self.pool_list[i](out_prev)
                     out_prev = out.clone()
-                    print("Here:", i, out_prev.size())
-
+                
+                activity[i+1] += torch.count_nonzero(out_prev.detach())/torch.numel(out_prev.detach())
 
             out_prev = out_prev.reshape(batch_size, -1)
-            print(out_prev.size())
 
             mem_fc1 = self.leak_mem * mem_fc1 + self.bntt_fc[t](self.fc1(out_prev))
             mem_thr = (mem_fc1 / self.fc1.threshold) - 1.0
@@ -147,13 +147,16 @@ class SNN_VGG9_BNTT(nn.Module):
             mem_fc1 = mem_fc1 - rst
             out_prev = out.clone()
 
+            activity[8] += torch.count_nonzero(out_prev.detach())/torch.numel(out_prev.detach())
+
             # accumulate voltage in the last layer
             mem_fc2 = mem_fc2 + self.fc2(out_prev)
 
         out_voltage = mem_fc2 / self.timesteps
+        activity = torch.stack([x / self.timesteps for x in activity])
+        # print(activity)
 
-
-        return out_voltage
+        return out_voltage, activity
 
 
 class SNN_VGG11_BNTT(nn.Module):

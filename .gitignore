@@ -61,3 +61,4 @@ nmnist/data
 saved_model
 data/
 wandb
+Rate-vs-Direct
