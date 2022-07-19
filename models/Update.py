@@ -55,15 +55,15 @@ class LocalUpdate(object):
         trained_data_size = 0
         if local_epochs is None:
             local_epochs = self.args.local_ep
-        activities = []
+        # activities = []
         for iter in range(local_epochs):
             batch_loss = []
             for batch_idx, (images, labels) in enumerate(self.ldr_train):
                 images, labels = images.to(self.args.device), labels.to(self.args.device)
                 trained_data_size += len(images)
                 net.zero_grad()
-                log_probs, activity = net(images)
-                activities.append(activity)
+                log_probs = net(images)
+                # activities.append(activity)
                 loss = self.loss_func(log_probs, labels)
                 loss.backward()
                 optimizer.step()
@@ -74,8 +74,9 @@ class LocalUpdate(object):
                 batch_loss.append(loss.item())
             epoch_loss.append(sum(batch_loss)/len(batch_loss))
         # print("training sample size: ", trained_data_size)
-        
-        return net.state_dict(), sum(epoch_loss) / len(epoch_loss), trained_data_size, torch.mean(torch.stack(activities), 0)
+        # activity = torch.mean(torch.stack(activities), 0)
+
+        return net.state_dict(), sum(epoch_loss) / len(epoch_loss), trained_data_size
     
     def test_with_train_data(self, net):
         net.eval()
@@ -85,9 +86,9 @@ class LocalUpdate(object):
         if self.args.test_size:
             test_size = min(len(self.dataset), self.args.test_size)
             sampler = RandomSampler(self.dataset, num_samples=test_size)
-            data_loader = DataLoader(self.dataset, sampler=sampler, batch_size=self.args.bs)
+            data_loader = DataLoader(self.dataset, sampler=sampler, batch_size=self.args.bs, drop_last=True)
         else:
-            data_loader = DataLoader(self.dataset, batch_size=self.args.bs)
+            data_loader = DataLoader(self.dataset, batch_size=self.args.bs, drop_last=True)
             test_size = len(data_loader.dataset)
         
         print("Testing on {} images".format(test_size))

@@ -7,6 +7,7 @@ import torch
 import random
 from torch import nn
 from typing import Union
+from collections import OrderedDict
 
 def percentile(t: torch.tensor, q: float) -> Union[int, float]:
     """
@@ -56,8 +57,8 @@ class FedLearn(object):
                 w_avg[k] = w_avg[k].cpu() + torch.mean(torch.abs(w_init[k].cpu() - w[0][k].cpu())*1.0) * torch.randn(w[0][k].size()) * self.args.grad_noise_stdev # Scale the noise by mean of the absolute value of the model updates
             else:
                 w_avg[k] = w_avg[k].cpu() + torch.randn(w[0][k].size()) * self.args.grad_noise_stdev # Add gaussian noise to the model updates
-        for k in w_avg.keys():
-            for i in range(1, len(w)):
+        for k in w[0].keys():
+            for i in range(len(w)):
                 if non_stragglers[i] == 1:
                     if w_init:
                         w_avg[k] = w_avg[k].cpu() + w[i][k].cpu() + torch.mean(torch.abs(w_init[k].cpu() - w[i][k].cpu())*1.0) * torch.randn(w[i][k].size()) * self.args.grad_noise_stdev # Scale the noise by mean of the absolute value of the model updates
@@ -66,6 +67,26 @@ class FedLearn(object):
                         w_avg[k] = w_avg[k].cpu() + w[i][k].cpu() + torch.randn(w[i][k].size()) * self.args.grad_noise_stdev # Add gaussian noise to the model updates
             w_avg[k] = torch.div(w_avg[k], sum(non_stragglers))
         return w_avg
+
+    def FedAvgWeighted(self, w, agg_weights, w_init):
+        non_stragglers = [1]*len(w)
+        for i in range(1, len(w)):
+            epsilon = random.uniform(0, 1)
+            if epsilon < self.args.straggler_prob:
+                non_stragglers[i] = 0
+        
+        w_avg = OrderedDict()
+        for k in w[0].keys():
+            for i in range(len(w)):
+                if non_stragglers[i] == 1:
+                    if k not in w_avg.keys():
+                        w_avg[k] = w_init[k].cpu() + (w[i][k].cpu() - w_init[k].cpu()) * agg_weights[i] + torch.mean(torch.abs(w_init[k].cpu() - w[i][k].cpu())*1.0) * torch.randn(w[i][k].size()) * self.args.grad_noise_stdev 
+                    else:
+                        w_avg[k] += w_init[k].cpu() + (w[i][k].cpu() - w_init[k].cpu()) * agg_weights[i] + torch.mean(torch.abs(w_init[k].cpu() - w[i][k].cpu())*1.0) * torch.randn(w[i][k].size()) * self.args.grad_noise_stdev # Scale the noise by mean of the absolute value of the model updates
+                    # 1.0 is to convert into float
+            w_avg[k] = torch.div(w_avg[k], sum(non_stragglers))
+        return w_avg
+
 
     def FedAvgSparse(self, w_init, delta_w_locals, th_basis = "magnitude", pruning_type = "uniform", sparsity = 0, activity = None, activity_multiplier = 1, activity_mask = None):
         # th_basis -> on what basis the threshold is calculated - magnitude or activity

@@ -34,7 +34,7 @@ def PoissonGen(inp, rescale_fac=2.0):
 
 
 class SNN_VGG9_BNTT(nn.Module):
-    def __init__(self, timesteps=20, leak_mem=0.95, img_size=32,  num_cls=10):
+    def __init__(self, timesteps=25, max_timestep=35, leak_mem=0.95, img_size=32,  num_cls=10):
         super(SNN_VGG9_BNTT, self).__init__()
 
         self.img_size = img_size
@@ -43,37 +43,38 @@ class SNN_VGG9_BNTT(nn.Module):
         self.spike_fn = Surrogate_BP_Function.apply
         self.leak_mem = leak_mem
         self.batch_num = self.timesteps
+        self.max_batch_num = max_timestep
 
         print (">>>>>>>>>>>>>>>>>>> VGG 9 >>>>>>>>>>>>>>>>>>>>>>")
-        print ("***** time step per batchnorm".format(self.batch_num))
+        print ("{} timesteps per batchnorm".format(self.timesteps))
         print (">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 
         affine_flag = True
         bias_flag = False
 
         self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=bias_flag)
-        self.bntt1 = nn.ModuleList([nn.BatchNorm2d(64, eps=1e-4, momentum=0.1, affine=affine_flag) for i in range(self.batch_num)])
+        self.bntt1 = nn.ModuleList([nn.BatchNorm2d(64, eps=1e-4, momentum=0.1, affine=affine_flag, track_running_stats=False) for i in range(self.max_batch_num)])
         self.conv2 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=bias_flag)
-        self.bntt2 = nn.ModuleList([nn.BatchNorm2d(64, eps=1e-4, momentum=0.1, affine=affine_flag) for i in range(self.batch_num)])
+        self.bntt2 = nn.ModuleList([nn.BatchNorm2d(64, eps=1e-4, momentum=0.1, affine=affine_flag, track_running_stats=False) for i in range(self.max_batch_num)])
         self.pool1 = nn.AvgPool2d(kernel_size=2)
 
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1, bias=bias_flag)
-        self.bntt3 = nn.ModuleList([nn.BatchNorm2d(128, eps=1e-4, momentum=0.1, affine=affine_flag) for i in range(self.batch_num)])
+        self.bntt3 = nn.ModuleList([nn.BatchNorm2d(128, eps=1e-4, momentum=0.1, affine=affine_flag, track_running_stats=False) for i in range(self.max_batch_num)])
         self.conv4 = nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1, bias=bias_flag)
-        self.bntt4 = nn.ModuleList([nn.BatchNorm2d(128, eps=1e-4, momentum=0.1, affine=affine_flag) for i in range(self.batch_num)])
+        self.bntt4 = nn.ModuleList([nn.BatchNorm2d(128, eps=1e-4, momentum=0.1, affine=affine_flag, track_running_stats=False) for i in range(self.max_batch_num)])
         self.pool2 = nn.AvgPool2d(kernel_size=2)
 
         self.conv5 = nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1, bias=bias_flag)
-        self.bntt5 = nn.ModuleList([nn.BatchNorm2d(256, eps=1e-4, momentum=0.1, affine=affine_flag) for i in range(self.batch_num)])
+        self.bntt5 = nn.ModuleList([nn.BatchNorm2d(256, eps=1e-4, momentum=0.1, affine=affine_flag, track_running_stats=False) for i in range(self.max_batch_num)])
         self.conv6 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=bias_flag)
-        self.bntt6 = nn.ModuleList([nn.BatchNorm2d(256, eps=1e-4, momentum=0.1, affine=affine_flag) for i in range(self.batch_num)])
+        self.bntt6 = nn.ModuleList([nn.BatchNorm2d(256, eps=1e-4, momentum=0.1, affine=affine_flag, track_running_stats=False) for i in range(self.max_batch_num)])
         self.conv7 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=bias_flag)
-        self.bntt7 = nn.ModuleList([nn.BatchNorm2d(256, eps=1e-4, momentum=0.1, affine=affine_flag) for i in range(self.batch_num)])
+        self.bntt7 = nn.ModuleList([nn.BatchNorm2d(256, eps=1e-4, momentum=0.1, affine=affine_flag, track_running_stats=False) for i in range(self.max_batch_num)])
         self.pool3 = nn.AvgPool2d(kernel_size=2)
 
 
         self.fc1 = nn.Linear((self.img_size//8)*(self.img_size//8)*256, 1024, bias=bias_flag)
-        self.bntt_fc = nn.ModuleList([nn.BatchNorm1d(1024, eps=1e-4, momentum=0.1, affine=affine_flag) for i in range(self.batch_num)])
+        self.bntt_fc = nn.ModuleList([nn.BatchNorm1d(1024, eps=1e-4, momentum=0.1, affine=affine_flag, track_running_stats=False) for i in range(self.max_batch_num)])
         self.fc2 = nn.Linear(1024, self.num_cls, bias=bias_flag)
 
         self.conv_list = [self.conv1, self.conv2, self.conv3, self.conv4, self.conv5, self.conv6, self.conv7]
@@ -97,7 +98,6 @@ class SNN_VGG9_BNTT(nn.Module):
 
 
 
-
     def forward(self, inp):
 
         batch_size = inp.size(0)
@@ -114,13 +114,13 @@ class SNN_VGG9_BNTT(nn.Module):
         mem_fc2 = torch.zeros(batch_size, self.num_cls).cuda()
 
         active_layer_count = 9
-        activity = torch.zeros(active_layer_count).cuda()
+        # activity = torch.zeros(active_layer_count).cuda()
 
         for t in range(self.timesteps):
 
             spike_inp = PoissonGen(inp)
             out_prev = spike_inp
-            activity[0] += torch.count_nonzero(spike_inp.detach())/torch.numel(spike_inp.detach())
+            # activity[0] += torch.count_nonzero(spike_inp.detach())/torch.numel(spike_inp.detach())
 
             for i in range(len(self.conv_list)):
                 mem_conv_list[i] = self.leak_mem * mem_conv_list[i] + self.bntt_list[i][t](self.conv_list[i](out_prev))
@@ -135,7 +135,7 @@ class SNN_VGG9_BNTT(nn.Module):
                     out = self.pool_list[i](out_prev)
                     out_prev = out.clone()
                 
-                activity[i+1] += torch.count_nonzero(out_prev.detach())/torch.numel(out_prev.detach())
+                # activity[i+1] += torch.count_nonzero(out_prev.detach())/torch.numel(out_prev.detach())
 
             out_prev = out_prev.reshape(batch_size, -1)
 
@@ -147,16 +147,20 @@ class SNN_VGG9_BNTT(nn.Module):
             mem_fc1 = mem_fc1 - rst
             out_prev = out.clone()
 
-            activity[8] += torch.count_nonzero(out_prev.detach())/torch.numel(out_prev.detach())
+            # activity[8] += torch.count_nonzero(out_prev.detach())/torch.numel(out_prev.detach())
 
             # accumulate voltage in the last layer
             mem_fc2 = mem_fc2 + self.fc2(out_prev)
 
         out_voltage = mem_fc2 / self.timesteps
-        activity = torch.stack([x / self.timesteps for x in activity])
+        # activity = torch.stack([x / self.timesteps for x in activity])
         # print(activity)
 
-        return out_voltage, activity
+        return out_voltage
+    
+    def set_timestep(self, timestep):
+        print("setting timestep: ", timestep)
+        self.timesteps = timestep
 
 
 class SNN_VGG11_BNTT(nn.Module):

@@ -52,6 +52,7 @@ ENV/
 CIFAR*
 cifar*
 *results*
+*Results*
 test/
 ddd20/*dataset*/*
 ddd20/data

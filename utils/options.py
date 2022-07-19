@@ -18,6 +18,8 @@ def args_parser():
 
     parser.add_argument('--lr_reduce', default=10, type=int, help='reduction factor for learning rate')
     parser.add_argument('--timesteps', default=25, type=int, help='simulation timesteps')
+    parser.add_argument('--timestep_mean', default=25, type=int, help='mean of local timesteps')
+    parser.add_argument('--timestep_std', default=0, type=int, help='std of local timesteps')
     parser.add_argument('--leak', default=1.0, type=float, help='membrane leak')
     parser.add_argument('--scaling_factor', default=0.7, type=float, help='scaling factor for thresholds at reduced timesteps')
     parser.add_argument('--default_threshold', default=1.0, type=float, help='intial threshold to train SNN from scratch')
@@ -36,6 +38,8 @@ def args_parser():
     parser.add_argument('--candidate_selection', type=str, default="random", help='candidate selection strategy')
     parser.add_argument('--candidate_frac', type=float, default=0.1, help='the fraction of candidates in training: d')
     parser.add_argument('--gamma', type=float, default=2, help='divide the prob by gamma after client is chosen')
+    parser.add_argument('--FedAvgWeight', type=str, default=None, help='specify way to apply weighted FedAvg')
+    parser.add_argument('--timestep_pattern', type=str, default=None, help='timestep pattern for single model')
 
     # model arguments
     parser.add_argument('--model', type=str, default='mlp', help='model name')

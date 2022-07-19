@@ -16,7 +16,7 @@ Other options can be found by running
 
 Sample scripts are provided at `test_cifar10.sh` and `test_cifar100.sh`.
 
-## Ackonwledgements
+## Acknowledgements
 Initial Code adopted from https://github.com/shaoxiongji/federated-learning
 
 Code for SNN training adopted from https://github.com/Intelligent-Computing-Lab-Yale/BNTT-Batch-Normalization-Through-Time

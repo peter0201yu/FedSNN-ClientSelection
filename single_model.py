@@ -104,10 +104,11 @@ if __name__ == '__main__':
     # img_size = dataset_train[0][0].shape
 
     # build model
+    max_timestep = 25
     model_args = {'args': args}
     if args.model[0:3].lower() == 'vgg':
         if args.snn:
-            model_args = {'num_cls': args.num_classes, 'timesteps': args.timesteps}
+            model_args = {'num_cls': args.num_classes, 'timesteps': max_timestep}
             net = snn_models_bntt.SNN_VGG9_BNTT(**model_args).cuda()
         else:
             model_args = {'vgg_name': args.model, 'labels': args.num_classes, 'dataset': args.dataset, 'kernel_size': 3, 'dropout': args.dropout}
@@ -145,9 +146,9 @@ if __name__ == '__main__':
     # print("Random Model Test accuracy: {:.2f}".format(acc_train))
 
     # Print the SNN model, optimizer, and simulation parameters
-    print("********** SNN simulation parameters **********")
-    print("Simulation # time-step : {}".format(args.timesteps))
-    print("Membrane decay rate : {0:.2f}\n".format(model_args["leak_mem"]))
+    # print("********** SNN simulation parameters **********")
+    # print("Simulation # time-step : {}".format(args.timesteps))
+    # print("Membrane decay rate : {0:.2f}\n".format(model_args["leak_mem"]))
     print("********** SNN learning parameters **********")
     print("Backprop optimizer     : {}".format(args.optimizer))
     print("Number of epochs       : {}".format(args.epochs))
@@ -178,8 +179,18 @@ if __name__ == '__main__':
     else:
         print("Invalid optimizer")
 
+    if args.timestep_pattern == "uniform":
+        timesteps_list = [args.timesteps] * 60
+    elif args.timestep_pattern == "increasing":
+        timesteps_list = [15] * 20 + [20] * 20 + [25] * 20
+    elif args.timestep_pattern == "decreasing":
+        timesteps_list = [25] * 20 + [20] * 20 + [15] * 20
+    else:
+        timesteps_list = [25] * 60
+
     for epoch in range(args.epochs):
         print("ROUND ", epoch)
+        net.set_timestep(timesteps_list[epoch])
         net.train()
         
         epoch_loss = []
