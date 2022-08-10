@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # Python version: 3.6
-# Cleaned up version of main_fed.py
+# Cleaned up version of the original main_fed.py
 
 import matplotlib
 matplotlib.use('Agg')
@@ -162,7 +162,8 @@ if __name__ == '__main__':
     dataset_size = sum([len(dict_users[i]) for i in range(args.num_users)])
     data_probs = [float(len(dict_users[i]))/dataset_size for i in range(args.num_users)]
     chosen_candidates, chosen_users = None, None
-
+    
+    # based on data distribution: pick clients with most samples in all classes
     if args.client_selection == "handpick":
         handpick_list = [
             [87,27,98,72,62,37,17,61,36,33],

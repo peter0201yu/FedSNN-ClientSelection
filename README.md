@@ -1,25 +1,71 @@
-# Federated Learning with Spiking Neural Networks
-
-This repo contains the source code for the paper "Federated Learning with Spiking Neural Networks" (https://arxiv.org/abs/2106.06579).
-
-## Requirements
-python>=3.7
-pytorch>=1.7.1
-
-## Run
-
-For example, to train a federated SNN model with 10 clients and 2 clients participating in each round:
-> python main_fed.py --snn --dataset CIFAR10 --num_classes 10 --model VGG9 --optimizer SGD --bs 32 --local_bs 32 --lr 0.1 --lr_reduce 5 --epochs 100 --local_ep 2 --eval_every 1 --num_users 10 --frac 0.2 --iid --gpu 0 --timesteps 20 --result_dir test
-
-Other options can be found by running
-> pythin main_fed.py --help
-
-Sample scripts are provided at `test_cifar10.sh` and `test_cifar100.sh`.
+# Client Selection for Federated Learning with Spiking Neural Networks
 
 ## Acknowledgements
-Initial Code adopted from https://github.com/shaoxiongji/federated-learning
 
-Code for SNN training adopted from https://github.com/Intelligent-Computing-Lab-Yale/BNTT-Batch-Normalization-Through-Time
-
+Code adapted from [Federated Learning with Spiking Neural Networks](https://github.com/Intelligent-Computing-Lab-Yale/FedSNN).
 
 
+## Environment
+
+See `environment.yml`.
+
+
+## Client selection strategies
+
+In `models/client_selection.py`, I implemented a few client selection strategies based on previous research papers. 
+
+- Random: select clients randomly.
+
+- Biggest loss: select clients with biggest local forward loss when forwarding data on newly received global model. Based on this paper: [Client Selection in Federated Learning: Convergence Analysis and Power-of-Choice Selection Strategies](https://arxiv.org/abs/2010.01243).
+
+- Biggest training loss: select clients with biggest local training loss.
+
+- Gradient diversity: select a group of clients whose weighted sum of gradients (delta weight) best approximates the sum of gradients of all clients. Based on this paper: [Diverse Client Selection for Federated Learning: Submodularity and Convergence Analysis](https://fl-icml.github.io/2021/papers/FL-ICML21_paper_67.pdf).
+
+- Update norm: select clients with biggest update/gradient norms. Based on this paper: [Optimal Client Sampling for Federated Learning](https://arxiv.org/abs/2010.13723).
+
+- Spike activity diversity: select clients with the most diverse spike activities (only applicable to SNNs).
+
+
+## Candidate selection strategies
+
+In `models/candidate_selection.py`, I implemented a few candidate selection strategies. The reason for selecting candidates is that most client selection algorithms require the local training information of clients. Our simulated federated learning system, however, cannot handle the training of many clients in each round. Therefore, we first select ~20 candidates to train and then select among them for models to be uploaded and aggregated.
+
+- Random: select candidates randomly.
+
+- Loop: select candidates in a loop, no candidate overlap in consecutive rounds.
+
+- Data amount: candidates with more data are more likely to be selected.
+
+- Reduce collision: candidates that were previously chosen become less likely to be chosen.
+
+
+## Heterogenous training and weighted FedAvg strategies
+
+In `heterogenous.py`, we explore the potential of performing federated learning with SNNs on heterogenous devices. More specifically, we can adjust the training timesteps based on the device's computing power, and when aggregating the model, we can perform FedAvg with different weight for the models.
+
+The numbers of timesteps of the models are generated using the `timestep_mean` and `timestep_std` arguments. I also implemented a few weighted FedAvg strategies (inside the script):
+
+- timestep_prop: the weighting coefficient of the model is proportional to the number of timesteps used for training the model
+
+- timestep_inv: the weighting is inversely proportional to the number of timesteps
+
+- train_loss_prop: the weighting is proportional to the training loss
+
+- train_loss_inv: the weighting is inversely proportional to the training loss
+
+
+## Experiments
+
+`single_model.py` trains and evaluates a single model (without federated learning) while using a portion of the total data (to imitate the amount of local training data in federated learning). When trying out a new set of hyperparameters, run this script to separate the strategy's effect on local training and the strategy's effect on federated learning. `test_single.sh` contains an example that runs the script with arguments.
+
+`client_experiment.py` contains the components needed to compare client/candidate selection strategies. `test_cifar10_clients.sh` contains an example that runs the script with arguments.
+
+`heterogenous.py` contains the components needed to compare weighted FedAvg strategies in the heterogenous training scenario. `test_cifar_hetero.sh` contains an example that runs the script with arguments.
+
+
+## Results - wandb projects
+
+wandb project for [client/candidate selection experiments](https://wandb.ai/peteryu/FedSNN-candidate?workspace=user-peteryu)
+
+wandb project for [heterogenous training experiments](https://wandb.ai/peteryu/FedSNN-heterogenous?workspace=user-peteryu)
