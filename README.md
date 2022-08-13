@@ -40,9 +40,9 @@ In `models/candidate_selection.py`, I implemented a few candidate selection stra
 - Reduce collision: candidates that were previously chosen become less likely to be chosen.
 
 
-## Heterogenous training and weighted FedAvg strategies
+## Heterogeneous training and weighted FedAvg strategies
 
-In `heterogenous.py`, we explore the potential of performing federated learning with SNNs on heterogenous devices. More specifically, we can adjust the training timesteps based on the device's computing power, and when aggregating the model, we can perform FedAvg with different weight for the models.
+In `heterogeneous.py`, we explore the potential of performing federated learning with SNNs on heterogeneous devices. More specifically, we can adjust the training timesteps based on the device's computing power, and when aggregating the model, we can perform FedAvg with different weight for the models.
 
 The numbers of timesteps of the models are generated using the `timestep_mean` and `timestep_std` arguments. I also implemented a few weighted FedAvg strategies (inside the script):
 
@@ -61,11 +61,11 @@ The numbers of timesteps of the models are generated using the `timestep_mean` a
 
 `client_experiment.py` contains the components needed to compare client/candidate selection strategies. `test_cifar10_clients.sh` contains an example that runs the script with arguments.
 
-`heterogenous.py` contains the components needed to compare weighted FedAvg strategies in the heterogenous training scenario. `test_cifar_hetero.sh` contains an example that runs the script with arguments.
+`heterogeneous.py` contains the components needed to compare weighted FedAvg strategies in the heterogeneous training scenario. `test_cifar_hetero.sh` contains an example that runs the script with arguments.
 
 
 ## Results - wandb projects
 
 wandb project for [client/candidate selection experiments](https://wandb.ai/peteryu/FedSNN-candidate?workspace=user-peteryu)
 
-wandb project for [heterogenous training experiments](https://wandb.ai/peteryu/FedSNN-heterogenous?workspace=user-peteryu)
+wandb project for [heterogeneous training experiments](https://wandb.ai/peteryu/FedSNN-heterogeneous?workspace=user-peteryu)
